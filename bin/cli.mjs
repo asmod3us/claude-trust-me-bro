@@ -48,7 +48,8 @@ function getHookCommand(subcommand) {
 }
 
 function isOurEntry(entry) {
-  const check = (str) => str?.includes("claude-trust-me-bro");
+  const cliPath = new URL(import.meta.url).pathname;
+  const check = (str) => str?.includes(cliPath);
   if (entry.hooks?.some((h) => check(h.command))) return true;
   if (check(entry.command)) return true;
   return false;
