@@ -1,0 +1,17 @@
+{
+  "name": "claude-auto-approver",
+  "version": "1.0.0",
+  "description": "Auto-approve all Claude Code permission requests via hooks",
+  "type": "module",
+  "bin": {
+    "claude-auto-approver": "./bin/cli.mjs"
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}
