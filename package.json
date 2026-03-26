@@ -1,14 +1,25 @@
 {
-  "name": "claude-auto-approver",
+  "name": "claude-trust-me-bro",
   "version": "1.0.0",
-  "description": "Auto-approve all Claude Code permission requests via hooks",
+  "description": "Auto-approve all Claude Code permission requests — skip every prompt with a single command",
   "type": "module",
   "bin": {
-    "claude-auto-approver": "./bin/cli.mjs"
+    "tmb": "./bin/cli.mjs"
   },
   "files": [
     "bin",
     "src"
+  ],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "anthropic",
+    "auto-approve",
+    "permissions",
+    "hooks",
+    "cli",
+    "developer-tools",
+    "automation"
   ],
   "engines": {
     "node": ">=18.0.0"

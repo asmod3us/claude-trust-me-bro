@@ -16,7 +16,7 @@ const PRE_TOOL_ALLOW = JSON.stringify({
   hookSpecificOutput: {
     hookEventName: "PreToolUse",
     permissionDecision: "allow",
-    permissionDecisionReason: "Auto-approved by claude-auto-approver",
+    permissionDecisionReason: "Auto-approved by claude-trust-me-bro",
   },
 });
 
@@ -48,7 +48,7 @@ function getHookCommand(subcommand) {
 }
 
 function isOurEntry(entry) {
-  const check = (str) => str?.includes("claude-auto-approver");
+  const check = (str) => str?.includes("claude-trust-me-bro");
   if (entry.hooks?.some((h) => check(h.command))) return true;
   if (check(entry.command)) return true;
   return false;
@@ -123,7 +123,7 @@ function enable() {
   }
   writeJson(LOCAL_SETTINGS_PATH, local);
 
-  console.log("Auto-approver enabled (3 layers):");
+  console.log("Trust me bro, auto-approver enabled (3 layers):");
   console.log("  1. PreToolUse hook → auto-approve tool calls");
   console.log('  2. PermissionRequest hook → auto-approve "Do you want to proceed?"');
   console.log("  3. Broad allow rules in settings.local.json");
@@ -155,7 +155,7 @@ function disable() {
   writeJson(LOCAL_SETTINGS_PATH, local);
 
   console.log(
-    "Auto-approver disabled. Claude Code will prompt for permissions again."
+    "Trust revoked. Claude Code will prompt for permissions again."
   );
 }
 
@@ -171,11 +171,11 @@ function status() {
     local.permissions?.allow?.includes(r)
   );
 
-  console.log(`PreToolUse hook:      ${preToolActive ? "active" : "inactive"}`);
+  console.log(`PreToolUse hook:        ${preToolActive ? "active" : "inactive"}`);
   console.log(`PermissionRequest hook: ${permReqActive ? "active" : "inactive"}`);
-  console.log(`Allow rules:          ${rulesActive ? "active" : "inactive"}`);
+  console.log(`Allow rules:            ${rulesActive ? "active" : "inactive"}`);
   console.log(
-    `\nOverall: ${preToolActive && permReqActive && rulesActive ? "ENABLED" : "PARTIALLY ENABLED / DISABLED"}`
+    `\nOverall: ${preToolActive && permReqActive && rulesActive ? "TRUSTED (all layers active)" : "NOT FULLY TRUSTED"}`
   );
 }
 
@@ -216,12 +216,12 @@ switch (command) {
   }
 
   default: {
-    console.log(`Usage: claude-auto-approver <command>
+    console.log(`Usage: tmb <command>
 
 Commands:
-  enable   Register auto-approve hooks + allow rules
-  disable  Remove hooks and allow rules
-  status   Check if auto-approve is active`);
+  enable   Trust me bro — auto-approve everything
+  disable  Revoke trust — restore permission prompts
+  status   Check if Claude trusts you, bro`);
     if (command) process.exit(1);
     break;
   }
