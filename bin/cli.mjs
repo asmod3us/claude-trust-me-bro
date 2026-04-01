@@ -3,7 +3,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import crypto from "node:crypto";
 
 const SETTINGS_PATH = path.join(os.homedir(), ".claude", "settings.json");
 const LOCAL_SETTINGS_PATH = path.join(
@@ -68,11 +67,16 @@ function readJson(filepath) {
 function writeJson(filepath, data) {
   const dir = path.dirname(filepath);
   fs.mkdirSync(dir, { recursive: true });
-  // Atomic write: write to temp file then rename to prevent race conditions
-  // with Claude Code or other processes writing to the same file.
-  const tmp = path.join(dir, `.${path.basename(filepath)}.${crypto.randomBytes(6).toString("hex")}.tmp`);
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
-  fs.renameSync(tmp, filepath);
+  // Atomic write: temp file in the same directory, then rename. The temp file
+  // must be on the same filesystem as the target so renameSync is atomic.
+  const tmp = path.join(dir, `.${path.basename(filepath)}.${Math.random().toString(36).slice(2)}.tmp`);
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+    fs.renameSync(tmp, filepath);
+  } catch (err) {
+    try { fs.unlinkSync(tmp); } catch (_) {}
+    throw err;
+  }
 }
 
 function upsertHook(settings, eventName, hookCommand) {
@@ -107,14 +111,14 @@ function removeHook(settings, eventName) {
 }
 
 function modifySettings(filepath, mutate) {
-  // Re-read immediately before write to minimize the race window.
+  // Re-read immediately before write to narrow the race window. This is
+  // best-effort — not safe against truly concurrent CLI invocations.
   const data = readJson(filepath);
   mutate(data);
   writeJson(filepath, data);
 }
 
 function enable() {
-  // Layer 1 + 2: Register hooks (re-reads right before write to avoid clobbering)
   modifySettings(SETTINGS_PATH, (settings) => {
     upsertHook(settings, "PreToolUse", getHookCommand("hook-pre-tool"));
     upsertHook(
@@ -146,7 +150,6 @@ function enable() {
 }
 
 function disable() {
-  // Remove hooks (re-reads right before write to avoid clobbering)
   modifySettings(SETTINGS_PATH, (settings) => {
     removeHook(settings, "PreToolUse");
     removeHook(settings, "PermissionRequest");
