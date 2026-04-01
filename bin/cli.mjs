@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import crypto from "node:crypto";
 
 const SETTINGS_PATH = path.join(os.homedir(), ".claude", "settings.json");
 const LOCAL_SETTINGS_PATH = path.join(
@@ -65,8 +66,13 @@ function readJson(filepath) {
 }
 
 function writeJson(filepath, data) {
-  fs.mkdirSync(path.dirname(filepath), { recursive: true });
-  fs.writeFileSync(filepath, JSON.stringify(data, null, 2));
+  const dir = path.dirname(filepath);
+  fs.mkdirSync(dir, { recursive: true });
+  // Atomic write: write to temp file then rename to prevent race conditions
+  // with Claude Code or other processes writing to the same file.
+  const tmp = path.join(dir, `.${path.basename(filepath)}.${crypto.randomBytes(6).toString("hex")}.tmp`);
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+  fs.renameSync(tmp, filepath);
 }
 
 function upsertHook(settings, eventName, hookCommand) {
@@ -100,29 +106,35 @@ function removeHook(settings, eventName) {
     delete settings.hooks;
 }
 
+function modifySettings(filepath, mutate) {
+  // Re-read immediately before write to minimize the race window.
+  const data = readJson(filepath);
+  mutate(data);
+  writeJson(filepath, data);
+}
+
 function enable() {
-  // Layer 1: Register PreToolUse hook (auto-approves before permission check)
-  const settings = readJson(SETTINGS_PATH);
-  upsertHook(settings, "PreToolUse", getHookCommand("hook-pre-tool"));
-  // Layer 2: Register PermissionRequest hook (handles "Do you want to proceed?" prompts)
-  upsertHook(
-    settings,
-    "PermissionRequest",
-    getHookCommand("hook-permission")
-  );
-  writeJson(SETTINGS_PATH, settings);
+  // Layer 1 + 2: Register hooks (re-reads right before write to avoid clobbering)
+  modifySettings(SETTINGS_PATH, (settings) => {
+    upsertHook(settings, "PreToolUse", getHookCommand("hook-pre-tool"));
+    upsertHook(
+      settings,
+      "PermissionRequest",
+      getHookCommand("hook-permission")
+    );
+  });
 
   // Layer 3: Add broad allow rules to settings.local.json
-  const local = readJson(LOCAL_SETTINGS_PATH);
-  if (!local.permissions) local.permissions = {};
-  if (!Array.isArray(local.permissions.allow)) local.permissions.allow = [];
+  modifySettings(LOCAL_SETTINGS_PATH, (local) => {
+    if (!local.permissions) local.permissions = {};
+    if (!Array.isArray(local.permissions.allow)) local.permissions.allow = [];
 
-  for (const rule of ALLOW_RULES) {
-    if (!local.permissions.allow.includes(rule)) {
-      local.permissions.allow.push(rule);
+    for (const rule of ALLOW_RULES) {
+      if (!local.permissions.allow.includes(rule)) {
+        local.permissions.allow.push(rule);
+      }
     }
-  }
-  writeJson(LOCAL_SETTINGS_PATH, local);
+  });
 
   console.log("Trust me bro, auto-approver enabled (3 layers):");
   console.log("  1. PreToolUse hook → auto-approve tool calls");
@@ -134,26 +146,26 @@ function enable() {
 }
 
 function disable() {
-  // Remove hooks
-  const settings = readJson(SETTINGS_PATH);
-  removeHook(settings, "PreToolUse");
-  removeHook(settings, "PermissionRequest");
-  writeJson(SETTINGS_PATH, settings);
+  // Remove hooks (re-reads right before write to avoid clobbering)
+  modifySettings(SETTINGS_PATH, (settings) => {
+    removeHook(settings, "PreToolUse");
+    removeHook(settings, "PermissionRequest");
+  });
 
   // Remove our allow rules from settings.local.json
-  const local = readJson(LOCAL_SETTINGS_PATH);
-  if (local.permissions?.allow) {
-    local.permissions.allow = local.permissions.allow.filter(
-      (r) => !ALLOW_RULES.includes(r)
-    );
-    if (local.permissions.allow.length === 0) delete local.permissions.allow;
-    if (
-      local.permissions &&
-      Object.keys(local.permissions).length === 0
-    )
-      delete local.permissions;
-  }
-  writeJson(LOCAL_SETTINGS_PATH, local);
+  modifySettings(LOCAL_SETTINGS_PATH, (local) => {
+    if (local.permissions?.allow) {
+      local.permissions.allow = local.permissions.allow.filter(
+        (r) => !ALLOW_RULES.includes(r)
+      );
+      if (local.permissions.allow.length === 0) delete local.permissions.allow;
+      if (
+        local.permissions &&
+        Object.keys(local.permissions).length === 0
+      )
+        delete local.permissions;
+    }
+  });
 
   console.log(
     "Trust revoked. Claude Code will prompt for permissions again."
